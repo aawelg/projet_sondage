@@ -1,0 +1,56 @@
+
+##################################################################
+
+#######       CALAGE SUR LES 2 CP AVEC UN PLAN SAS        ########
+
+##################################################################
+
+setwd("F:/Master 2 MIGS/projet/") # chemin du dossier courant
+
+# si la table conso n'existe pas dans le workspace, alors
+# on creer la table conso et nconso (sans var. qualitatives) avec la fonction struct_conso
+if( exists("conso")=="FALSE" ){
+  source('struct_conso.R')
+  struct_conso=struct_conso()
+  conso=struct_conso$conso; nconso=struct_conso$nconso
+}
+
+source('echantillonage.R'); source('calage_fun.R'); source('main_calage.R')
+# install.packages("ade4")
+library(ade4)
+library(MASS)
+
+N=nrow(nconso) # U
+n=600 # S
+P=ncol(nconso) # nombre de variable 
+p=336 # nombre de variable auxiliaire de d?part
+sem1.var=1:p # indice des var de la sem1
+sem2.var=(p+1):P # indice des var de la sem2
+X_U=as.matrix(nconso[,sem1.var]) # conso des ind de U pour la sem1
+Y_U=as.matrix(nconso[,sem2.var])  # conso des ind de U pour la sem2
+yk=apply(Y_U,1,sum) # conso de l'individu k dans U pdt la sem2
+ty=sum(yk) # conso total sem2
+dk=N/n # l'inverse de la probabilit? d'inclusion pour un plan p(.) SAS
+
+
+# ACP centree reduite sur les variables auxiliaires
+#--------------------------------------------------
+conso.acp=dudi.pca(X_U,center=TRUE,scale=TRUE,scannf=FALSE,nf=p)
+
+# Estimation optimale par calage sur les CP 1 et 2
+#-------------------------------------------------
+X_U=-conso.acp$li[,1:2] # matrice des var. auxiliaires sur les CP
+sem1.var=1:2  # indice des var de la sem1 
+ni=50 # nombre d'echantillons I de taille n=600
+i=seq(1,ni,1) 
+lest=sapply( i,function(x) main_calage(nconso,X_U,N,n,dk,sem1.var,sem2.var,"SAC") )
+est.ty=unlist(lest[1,]) # ni estimation par calage 
+est.hty=unlist(lest[2,]) # ni estimation par horvitz-thompson
+
+tty = rep( ty, ni )
+R = sum( (est.ty - tty)^2 ) / sum( (est.hty - tty)^2 )
+cv = sqrt( var(est.ty) ) / mean(est.ty)
+
+cat( sprintf( "\n L'estimateur moyen de la conso totale de la semaine 2 est de %d \n
+              La qualite R de l'estimateur est de %f \n
+              Le coefficient de variation est de %f \n" , round(mean(est.ty)), R, cv) )
